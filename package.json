@@ -38,6 +38,6 @@
 		"prettier": "^2.2.1"
 	},
 	"dependencies": {
-		"node-fetch": "^2.6.1"
+		"node-fetch": "^2.6.7"
 	}
 }
