@@ -35,6 +35,7 @@ function mapUnits(event, settings) {
 	if ("properties" in event && "absmartly" in event.properties) {
 		const absmartly = event.properties.absmartly;
 		if ("units" in absmartly) {
+			delete event.properties.absmartly;
 			return absmartly.units;
 		}
 	}
@@ -47,40 +48,12 @@ function mapUnits(event, settings) {
 		}));
 }
 
-function isNumeric(value) {
-	return typeof value === "number";
-}
-
-function isObject(value) {
-	return value instanceof Object && value.constructor === Object;
-}
-
-function filterNumeric(properties) {
-	return Object.assign(
-		{},
-		...Object.entries(properties).map(entry => {
-			const key = entry[0];
-			const value = entry[1];
-
-			if (isNumeric(value)) {
-				return { [key]: value };
-			} else if (isObject(value)) {
-				const filtered = filterNumeric(value);
-				if (Object.keys(filtered).length > 0) {
-					return { [key]: filtered };
-				}
-			}
-			return undefined;
-		})
-	);
-}
-
 function createGoal(event, settings, name) {
 	return [
 		{
 			name,
 			achievedAt: Date.parse(event.originalTimestamp),
-			properties: filterNumeric(event.properties || {})
+			properties: event.properties
 		}
 	];
 }
@@ -88,10 +61,6 @@ function createGoal(event, settings, name) {
 function mapGoal(event, settings) {
 	const name = event.event in settings.goalMapping ? settings.goalMapping[event.event] : event.event;
 	return createGoal(event, settings, name);
-}
-
-function normalizeName(name) {
-	return name.toLowerCase().replace(/[^A-Z0-9_]+/gi, "_");
 }
 
 async function sendEvent(data, settings) {
@@ -125,6 +94,16 @@ async function sendGoalEvent(event, settings, units, goals) {
 }
 
 async function onTrack(event, settings) {
+	if (event.event === "Experiment Viewed") {
+		if (settings.enableExposureTracking) {
+			if ("properties" in event && "absmartly" in event.properties) {
+				return sendEvent(event.properties.absmartly, settings);
+			}
+		}
+
+		return undefined;
+	}
+
 	const goal = mapGoal(event, settings);
 	if (goal != null && goal.length > 0) {
 		const units = mapUnits(event, settings);
@@ -141,7 +120,7 @@ async function onPage(event, settings) {
 			throw InvalidEventPayload("Page event requires page name.");
 		}
 
-		const goal = createGoal(event, settings, `${normalizeName(event.name)}_pageview`);
+		const goal = createGoal(event, settings, `Page: ${event.name}`);
 		if (goal != null && goal.length > 0) {
 			const units = mapUnits(event, settings);
 			if (units != null && units.length > 0) {
@@ -158,7 +137,7 @@ async function onScreen(event, settings) {
 			throw InvalidEventPayload("Screen event requires screen name.");
 		}
 
-		const goal = createGoal(event, settings, `${normalizeName(event.name)}_screenview`);
+		const goal = createGoal(event, settings, `Screen: ${event.name}`);
 		if (goal != null && goal.length > 0) {
 			const units = mapUnits(event, settings);
 			if (units != null && units.length > 0) {
@@ -169,6 +148,7 @@ async function onScreen(event, settings) {
 	return undefined;
 }
 
+// deprecated method of sending exposures through segment
 async function onGroup(event, settings) {
 	if (settings.enableExposureTracking) {
 		if ("traits" in event && "absmartly" in event.traits) {
